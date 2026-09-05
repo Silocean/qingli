@@ -1,0 +1,6 @@
+.build/
+Qingli.app/
+AppIcon.iconset/
+AppIcon.icns
+.swiftpm/
+.DS_Store
