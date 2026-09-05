@@ -198,8 +198,8 @@ struct ContentView: View {
 
     private var legend: some View {
         HStack(spacing: 16) {
-            LabelChip("休", color: Palette.cinnabar, text: "法定放假")
-            LabelChip("班", color: Palette.work, text: "调休上班")
+            LabelChip(off: true, text: "法定放假")
+            LabelChip(off: false, text: "调休上班")
             Spacer()
             Text("国务院安排 · 启动时更新")
                 .font(.system(size: 11))
@@ -254,9 +254,7 @@ struct ContentView: View {
                             Text(item.1.name)
                                 .font(.system(size: 13, design: .rounded))
                             Spacer()
-                            Text(item.1.isOffDay ? "休" : "班")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(item.1.isOffDay ? Palette.cinnabar : Palette.work)
+                            Mark(off: item.1.isOffDay)
                         }
                         .foregroundStyle(cal.isDate(item.0, inSameDayAs: date) ? .primary : .secondary)
                     }
@@ -310,7 +308,7 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(tint.opacity(0.18), lineWidth: 1)
@@ -336,6 +334,19 @@ private struct DayCell: View {
             return .primary
         }()
 
+        let wash: Color = {
+            if holiday?.isOffDay == true {
+                return Palette.cinnabar.opacity(scheme == .dark ? 0.28 : 0.14)
+            }
+            if holiday?.isOffDay == false {
+                return Palette.work.opacity(scheme == .dark ? 0.28 : 0.14)
+            }
+            if selected {
+                return Palette.cinnabar.opacity(scheme == .dark ? 0.14 : 0.08)
+            }
+            return .clear
+        }()
+
         Button {
             board.selected = date
             if !inMonth {
@@ -346,15 +357,13 @@ private struct DayCell: View {
                 HStack {
                     Spacer(minLength: 0)
                     if let holiday {
-                        Text(holiday.isOffDay ? "休" : "班")
-                            .font(.system(size: 9, weight: .semibold, design: .rounded))
-                            .foregroundStyle(holiday.isOffDay ? Palette.cinnabar : Palette.work)
+                        Mark(off: holiday.isOffDay)
                     } else {
-                        Text(" ").font(.system(size: 9))
+                        Mark(off: true).hidden()
                     }
                 }
                 Text("\(cal.component(.day, from: date))")
-                    .font(.system(size: 18, weight: today ? .semibold : .regular, design: .rounded))
+                    .font(.system(size: 18, weight: (today || holiday != nil) ? .semibold : .regular, design: .rounded))
                     .foregroundStyle(today && !selected ? Color.white : numberColor)
                     .frame(width: 32, height: 32)
                     .background {
@@ -366,18 +375,19 @@ private struct DayCell: View {
                     }
                 Text(Lunar.cell(date))
                     .font(.system(size: 10, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(holiday != nil ? numberColor.opacity(0.85) : .secondary)
                     .lineLimit(1)
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 2)
             .frame(maxWidth: .infinity, minHeight: 68)
-            .background(
-                selected
-                    ? Palette.cinnabar.opacity(scheme == .dark ? 0.14 : 0.08)
-                    : Color.clear,
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
+            .background(wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                if selected, holiday != nil {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(holiday?.isOffDay == true ? Palette.cinnabar : Palette.work, lineWidth: 1.2)
+                }
+            }
             .opacity(inMonth ? 1 : 0.32)
         }
         .buttonStyle(.plain)
@@ -473,24 +483,28 @@ private struct IconButton: View {
     }
 }
 
-private struct LabelChip: View {
-    let symbol: String
-    let color: Color
-    let text: String
-
-    init(_ symbol: String, color: Color, text: String) {
-        self.symbol = symbol
-        self.color = color
-        self.text = text
-    }
+private struct Mark: View {
+    let off: Bool
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(symbol)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(color)
+        Text(off ? "休" : "班")
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(off ? Palette.cinnabar : Palette.work, in: Capsule())
+    }
+}
+
+private struct LabelChip: View {
+    let off: Bool
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Mark(off: off)
             Text(text)
-                .font(.system(size: 11))
+                .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(.secondary)
         }
     }
