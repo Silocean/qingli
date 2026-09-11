@@ -85,12 +85,15 @@ final class Board {
         }
     }
 
-    func nextOfficial(from date: Date) -> (Date, Holiday)? {
+    /// 从 `date` 起找下一个法定放假日；`skippingName` 用于跳过当前已在过的同名假期（多日连休）。
+    func nextOfficial(from date: Date, skippingName: String? = nil) -> (Date, Holiday)? {
         let cal = ChinaCal.gregorian
         let start = cal.startOfDay(for: date)
         for i in 0..<400 {
             guard let d = cal.date(byAdding: .day, value: i, to: start) else { continue }
-            if let h = holiday(d), h.isOffDay { return (d, h) }
+            guard let h = holiday(d), h.isOffDay else { continue }
+            if let skippingName, h.name == skippingName { continue }
+            return (d, h)
         }
         return nil
     }
@@ -229,7 +232,12 @@ struct ContentView: View {
 
             statusCard(holiday: holiday, folk: folk, date: date)
 
-            if let next = board.nextOfficial(from: cal.date(byAdding: .day, value: 1, to: date) ?? date) {
+            // 已在某节放假日时，跳过同名连休，倒计时到下一个不同节日
+            let skipName = (holiday?.isOffDay == true) ? holiday?.name : nil
+            if let next = board.nextOfficial(
+                from: cal.date(byAdding: .day, value: 1, to: date) ?? date,
+                skippingName: skipName
+            ) {
                 let days = cal.dateComponents([.day], from: cal.startOfDay(for: date), to: next.0).day ?? 0
                 Text("距\(next.1.name)还有 \(days) 天")
                     .font(.system(size: 13, design: .rounded))
@@ -344,53 +352,55 @@ private struct DayCell: View {
             if selected {
                 return Palette.cinnabar.opacity(scheme == .dark ? 0.14 : 0.08)
             }
-            return .clear
+            // 极低透明度填充：避免透明格子被 isMovableByWindowBackground 当成拖窗区域而吞掉点击
+            return Color.primary.opacity(0.001)
         }()
 
-        Button {
-            board.selected = date
-            if !inMonth {
-                board.cursor = date
-            }
-        } label: {
-            VStack(spacing: 2) {
-                HStack {
-                    Spacer(minLength: 0)
-                    if let holiday {
-                        Mark(off: holiday.isOffDay)
-                    } else {
-                        Mark(off: true).hidden()
-                    }
-                }
-                Text("\(cal.component(.day, from: date))")
-                    .font(.system(size: 18, weight: (today || holiday != nil) ? .semibold : .regular, design: .rounded))
-                    .foregroundStyle(today && !selected ? Color.white : numberColor)
-                    .frame(width: 32, height: 32)
-                    .background {
-                        if today && !selected {
-                            Circle().fill(Palette.cinnabar)
-                        } else if selected {
-                            Circle().stroke(Palette.cinnabar, lineWidth: 1.4)
-                        }
-                    }
-                Text(Lunar.cell(date))
-                    .font(.system(size: 10, design: .rounded))
-                    .foregroundStyle(holiday != nil ? numberColor.opacity(0.85) : .secondary)
-                    .lineLimit(1)
-            }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 2)
-            .frame(maxWidth: .infinity, minHeight: 68)
-            .background(wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay {
-                if selected, holiday != nil {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(holiday?.isOffDay == true ? Palette.cinnabar : Palette.work, lineWidth: 1.2)
+        VStack(spacing: 2) {
+            HStack {
+                Spacer(minLength: 0)
+                if let holiday {
+                    Mark(off: holiday.isOffDay)
+                } else {
+                    Mark(off: true).hidden()
                 }
             }
-            .opacity(inMonth ? 1 : 0.32)
+            Text("\(cal.component(.day, from: date))")
+                .font(.system(size: 18, weight: (today || holiday != nil) ? .semibold : .regular, design: .rounded))
+                .foregroundStyle(today && !selected ? Color.white : numberColor)
+                .frame(width: 32, height: 32)
+                .background {
+                    if today && !selected {
+                        Circle().fill(Palette.cinnabar)
+                    } else if selected {
+                        Circle().stroke(Palette.cinnabar, lineWidth: 1.4)
+                    }
+                }
+            Text(Lunar.cell(date))
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(holiday != nil ? numberColor.opacity(0.85) : .secondary)
+                .lineLimit(1)
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 2)
+        .frame(maxWidth: .infinity, minHeight: 68)
+        .background(wash, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            if selected, holiday != nil {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(holiday?.isOffDay == true ? Palette.cinnabar : Palette.work, lineWidth: 1.2)
+            }
+        }
+        .opacity(inMonth ? 1 : 0.32)
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onTapGesture {
+            let day = cal.startOfDay(for: date)
+            board.selected = day
+            if !inMonth {
+                board.cursor = day
+            }
+        }
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel(accessLabel(holiday: holiday, cal: cal))
     }
 
@@ -458,7 +468,7 @@ private struct WindowChrome: NSViewRepresentable {
         let view = NSView()
         DispatchQueue.main.async {
             guard let window = view.window else { return }
-            window.isMovableByWindowBackground = true
+            window.isMovableByWindowBackground = false
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
         }
