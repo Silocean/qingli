@@ -48,12 +48,16 @@ final class Board {
     }
 
     func shiftMonth(_ delta: Int) {
-        cursor = ChinaCal.gregorian.date(byAdding: .month, value: delta, to: cursor) ?? cursor
+        let cal = ChinaCal.gregorian
+        guard let next = cal.date(byAdding: .month, value: delta, to: cursor) else { return }
+        let y = cal.component(.year, from: next)
+        guard (YearRange.min...YearRange.max).contains(y) else { return }
+        cursor = next
     }
 
     func jump(year: Int, month: Int) {
         let cal = ChinaCal.gregorian
-        let y = min(max(year, 2007), 2035)
+        let y = min(max(year, YearRange.min), YearRange.max)
         let m = min(max(month, 1), 12)
         let same = y == cal.component(.year, from: today) && m == cal.component(.month, from: today)
         let day = same ? cal.component(.day, from: today) : 1
@@ -97,6 +101,11 @@ final class Board {
         }
         return nil
     }
+}
+
+enum YearRange {
+    static let min = 1900
+    static let max = 2100
 }
 
 private enum Palette {
@@ -352,7 +361,6 @@ private struct DayCell: View {
             if selected {
                 return Palette.cinnabar.opacity(scheme == .dark ? 0.14 : 0.08)
             }
-            // 极低透明度填充：避免透明格子被 isMovableByWindowBackground 当成拖窗区域而吞掉点击
             return Color.primary.opacity(0.001)
         }()
 
@@ -416,7 +424,7 @@ private struct DayCell: View {
 private struct JumpPicker: View {
     @Bindable var board: Board
     @Binding var isPresented: Bool
-    private static let years = Array(2007...2035)
+    private static let years = Array(YearRange.min...YearRange.max)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
